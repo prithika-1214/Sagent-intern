@@ -210,6 +210,9 @@ const ManagePaymentsPage = () => {
   const [error, setError] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [bookingIdQuery, setBookingIdQuery] = useState('');
+
+  const normalizedBookingIdQuery = useMemo(() => bookingIdQuery.trim().toLowerCase(), [bookingIdQuery]);
 
   const loadRows = async () => {
     try {
@@ -310,6 +313,18 @@ const ManagePaymentsPage = () => {
     [rows]
   );
 
+  const filteredRows = useMemo(() => {
+    if (!normalizedBookingIdQuery) {
+      return rows;
+    }
+
+    return rows.filter((row) =>
+      String(getValue(row, ['booking_id', 'bookingId'], '')).trim().toLowerCase().includes(normalizedBookingIdQuery)
+    );
+  }, [normalizedBookingIdQuery, rows]);
+
+  const isFilterEmptyState = rows.length > 0 && filteredRows.length === 0;
+
   const handleDelete = async () => {
     if (!confirmDelete) {
       return;
@@ -349,11 +364,29 @@ const ManagePaymentsPage = () => {
         <StatCard title="Admin Revenue" value={formatCurrency(summary.adminRevenue)} color="orange" />
       </div>
 
+      <div className="filter-grid single">
+        <label className="field-group">
+          <span className="field-label">Search Booking ID</span>
+          <input
+            className="field-input"
+            value={bookingIdQuery}
+            onChange={(event) => setBookingIdQuery(event.target.value)}
+            placeholder="Enter booking id"
+          />
+        </label>
+      </div>
+
       <DataTable
         columns={columns}
-        rows={rows}
+        rows={filteredRows}
         rowKey={(row, index) => `${getValue(row, ['payment_id', 'paymentId', 'id'], 'payment')}-${index}`}
         pageSize={10}
+        emptyTitle={isFilterEmptyState ? 'No payments found' : undefined}
+        emptyDescription={
+          isFilterEmptyState && normalizedBookingIdQuery
+            ? `No payments match booking ID "${bookingIdQuery.trim()}".`
+            : undefined
+        }
         actions={(row) =>
           row?.isSynthetic ? null : (
             <button type="button" className="btn btn-small btn-danger" onClick={() => setConfirmDelete(row)}>

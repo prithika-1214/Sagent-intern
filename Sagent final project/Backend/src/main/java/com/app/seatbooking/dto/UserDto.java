@@ -34,7 +34,6 @@ public class UserDto {
     private Long mobileNumber;
 
     @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
-    @NotBlank
     @Size(max = 255)
     private String password;
 
@@ -73,7 +72,10 @@ public class UserDto {
         user.setUserName(request.getUserName());
         user.setEmail(request.getEmail());
         user.setMobileNumber(request.getMobileNumber());
-        user.setPassword(request.getPassword());
+        String nextPassword = request.getPassword();
+        if (nextPassword != null && !nextPassword.isBlank()) {
+            user.setPassword(nextPassword);
+        }
         user.setRole(normalizeRole(request.getRole()));
         user.setAccountStatus(normalizeAccountStatus(request.getAccountStatus()));
     }

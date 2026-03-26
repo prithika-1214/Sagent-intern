@@ -54,6 +54,14 @@ public class Event {
     @Column(name = "image_url", columnDefinition = "LONGTEXT")
     private String imageUrl;
 
+    @Lob
+    @Column(name = "trailer_url", columnDefinition = "LONGTEXT")
+    private String trailerUrl;
+
+    @Lob
+    @Column(name = "cast_members", columnDefinition = "LONGTEXT")
+    private String castMembersJson;
+
     @OneToMany(mappedBy = "event")
     private List<EventSchedule> schedules = new ArrayList<>();
 }

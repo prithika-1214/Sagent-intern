@@ -4,6 +4,7 @@ import { createEvent, deleteEvent, getEvents, updateEvent } from '../../api/even
 import { getStatusClassName } from '../../utils/status';
 import { getValue } from '../../utils/entity';
 import { formatDuration } from '../../utils/format';
+import { normalizeCastMembers } from '../../utils/eventCast';
 
 const limitSynopsisWords = (value) =>
   String(value || '')
@@ -54,7 +55,9 @@ const toEventPayload = (payload = {}) => {
     language: getValue(payload, ['language']),
     category: getValue(payload, ['category']),
     eventStatus: normalizeEventStatus(getValue(payload, ['event_status', 'eventStatus'])),
-    imageUrl: getValue(payload, ['image_url', 'imageUrl'])
+    imageUrl: getValue(payload, ['image_url', 'imageUrl']),
+    trailerUrl: getValue(payload, ['trailer_url', 'trailerUrl']),
+    castMembers: normalizeCastMembers(getValue(payload, ['cast_members', 'castMembers'], []))
   };
 };
 
@@ -62,6 +65,19 @@ const columns = [
   { key: 'event_id', label: 'Event ID', render: (row) => getValue(row, ['event_id', 'id']) },
   { key: 'event_name', label: 'Event Name' },
   { key: 'genre', label: 'Genre' },
+  {
+    key: 'cast_members',
+    label: 'Cast',
+    render: (row) => {
+      const castMembers = normalizeCastMembers(getValue(row, ['cast_members', 'castMembers'], []));
+      if (!castMembers.length) {
+        return '-';
+      }
+
+      const names = castMembers.slice(0, 2).map((member) => member.name).join(', ');
+      return castMembers.length > 2 ? `${names} +${castMembers.length - 2}` : names;
+    }
+  },
   { key: 'language', label: 'Language' },
   { key: 'category', label: 'Category' },
   { key: 'duration', label: 'Duration', render: (row) => formatDuration(getValue(row, ['duration'])) },
@@ -79,13 +95,27 @@ const fields = [
   { name: 'event_name', label: 'Event Name', required: true },
   { name: 'genre', label: 'Genre', required: true },
   { name: 'synopsis', label: 'Synopsis (3-4 words)', type: 'textarea', required: true },
+  {
+    name: 'cast_members',
+    label: 'Cast',
+    type: 'cast-list',
+    defaultValue: [],
+    toFormValue: (value, item) => normalizeCastMembers(getValue(item, ['cast_members', 'castMembers'], value || [])),
+    helperText: 'Add cast or artist details with name, role, and image URL. Rows without a name are ignored.'
+  },
   { name: 'duration', label: 'Duration (Hours)', type: 'number', required: true, min: 0.25, step: 0.25, placeholder: '2.5' },
   {
     name: 'image_url',
     label: 'Event Poster',
-    type: 'file',
-    accept: 'image/png,image/jpeg,image/webp',
-    helperText: 'Upload a poster image for customers. JPG, PNG, or WEBP recommended.'
+    type: 'image-url',
+    placeholder: 'https://example.com/poster.jpg',
+    helperText: 'Paste a poster image URL for customers. JPG, PNG, or WEBP links work best.'
+  },
+  {
+    name: 'trailer_url',
+    label: 'Trailer URL',
+    placeholder: 'https://www.youtube.com/watch?v=...',
+    helperText: 'Paste a YouTube, Vimeo, or direct video link to show a trailer on the event details page.'
   },
   {
     name: 'language',

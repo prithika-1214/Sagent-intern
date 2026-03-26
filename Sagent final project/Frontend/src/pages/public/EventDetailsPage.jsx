@@ -7,8 +7,11 @@ import ScheduleCard from '../../components/events/ScheduleCard';
 import { getEventById } from '../../api/eventsApi';
 import { getSchedulesByEventId } from '../../api/schedulesApi';
 import { getVenues } from '../../api/venuesApi';
+import { getCastFallbackStyle, getCastInitials, getEventCastMembers } from '../../utils/eventCast';
 import { getValue, normalizeArray } from '../../utils/entity';
 import { formatDate, formatDuration, limitWords } from '../../utils/format';
+import { getEventImageCandidates } from '../../utils/eventImage';
+import { getEventTrailerMedia } from '../../utils/trailerEmbed';
 
 const normalizeId = (value) => String(value ?? '').trim();
 const MAX_SHOW_DATES_PER_VENUE = 3;
@@ -172,6 +175,9 @@ const EventDetailsPage = () => {
   const [venuesMap, setVenuesMap] = useState({});
   const [selectedVenueId, setSelectedVenueId] = useState('');
   const [selectedShowDate, setSelectedShowDate] = useState('');
+  const [posterIndex, setPosterIndex] = useState(0);
+  const [castImageErrors, setCastImageErrors] = useState({});
+  const [isTrailerOpen, setIsTrailerOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const preselectedVenueId = normalizeId(searchParams.get('venueId'));
@@ -213,6 +219,27 @@ const EventDetailsPage = () => {
   useEffect(() => {
     loadData();
   }, [eventId]);
+
+  useEffect(() => {
+    setPosterIndex(0);
+    setCastImageErrors({});
+    setIsTrailerOpen(false);
+  }, [event]);
+
+  useEffect(() => {
+    if (!isTrailerOpen) {
+      return undefined;
+    }
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setIsTrailerOpen(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isTrailerOpen]);
 
   const schedulesByVenue = useMemo(() => {
     const grouped = {};
@@ -330,6 +357,8 @@ const EventDetailsPage = () => {
     },
     [selectedShowDate, selectedVenueSchedules]
   );
+  const castMembers = useMemo(() => getEventCastMembers(event), [event]);
+  const trailerMedia = useMemo(() => getEventTrailerMedia(event), [event]);
   const slotStepNumber = isVenuePreselected ? 2 : 3;
   const dateStepNumber = isVenuePreselected ? 1 : 2;
 
@@ -359,37 +388,166 @@ const EventDetailsPage = () => {
     return <EmptyState title="Event not found" description="This event may have been removed." />;
   }
 
+  const eventTitle = getValue(event, ['event_name', 'name'], 'Untitled Event');
+  const eventSynopsis = limitWords(getValue(event, ['synopsis']), 4) || 'No synopsis available.';
+  const posterCandidates = getEventImageCandidates(event);
+  const posterUrl = posterCandidates[posterIndex] || '';
   const isInactiveEvent =
     normalizeText(getValue(event, ['event_status', 'eventStatus', 'status'])).toUpperCase() === 'INACTIVE';
+  const handleOpenTrailer = () => {
+    if (!trailerMedia) {
+      return;
+    }
+
+    if (trailerMedia.kind === 'external') {
+      window.open(trailerMedia.sourceUrl, '_blank', 'noopener,noreferrer');
+      return;
+    }
+
+    setIsTrailerOpen(true);
+  };
 
   return (
     <section className="container section">
       <div className="detail-card">
-        <h1>{getValue(event, ['event_name', 'name'], 'Untitled Event')}</h1>
-        <p>{limitWords(getValue(event, ['synopsis']), 4) || 'No synopsis available.'}</p>
-        <div className="detail-grid">
-          <div>
-            <span>Genre</span>
-            <strong>{getValue(event, ['genre'], '-')}</strong>
+        <div className="detail-card-top">
+          <div className={`detail-poster ${posterUrl ? '' : 'is-fallback'}`}>
+            {posterUrl ? (
+              <img
+                src={posterUrl}
+                alt={`${eventTitle} poster`}
+                referrerPolicy="no-referrer"
+                onError={() => setPosterIndex((current) => current + 1)}
+              />
+            ) : (
+              <div className="event-card-fallback">
+                <div className="event-card-fallback-content">
+                  <span>{getValue(event, ['category'], 'Featured Event')}</span>
+                  <strong>{eventTitle}</strong>
+                  <small>{getValue(event, ['genre'], getValue(event, ['language'], 'Now booking'))}</small>
+                </div>
+              </div>
+            )}
+
+            {trailerMedia ? (
+              <div className="detail-poster-overlay">
+                <button type="button" className="trailer-pill" onClick={handleOpenTrailer}>
+                  <span className="trailer-pill-play" aria-hidden="true" />
+                  Trailer
+                </button>
+              </div>
+            ) : null}
           </div>
-          <div>
-            <span>Duration</span>
-            <strong>{formatDuration(getValue(event, ['duration']))}</strong>
-          </div>
-          <div>
-            <span>Language</span>
-            <strong>{getValue(event, ['language'], '-')}</strong>
-          </div>
-          <div>
-            <span>Category</span>
-            <strong>{getValue(event, ['category'], '-')}</strong>
-          </div>
-          <div>
-            <span>Status</span>
-            <strong>{getValue(event, ['event_status', 'status'], '-')}</strong>
+
+          <div className="detail-card-copy">
+            <h1>{eventTitle}</h1>
+            <p>{eventSynopsis}</p>
+            <div className="detail-grid">
+              <div>
+                <span>Genre</span>
+                <strong>{getValue(event, ['genre'], '-')}</strong>
+              </div>
+              <div>
+                <span>Duration</span>
+                <strong>{formatDuration(getValue(event, ['duration']))}</strong>
+              </div>
+              <div>
+                <span>Language</span>
+                <strong>{getValue(event, ['language'], '-')}</strong>
+              </div>
+              <div>
+                <span>Category</span>
+                <strong>{getValue(event, ['category'], '-')}</strong>
+              </div>
+              <div>
+                <span>Status</span>
+                <strong>{getValue(event, ['event_status', 'status'], '-')}</strong>
+              </div>
+            </div>
           </div>
         </div>
       </div>
+
+      {castMembers.length ? (
+        <div className="cast-section">
+          <div className="section-head">
+            <div>
+              <h2>Cast/Crew</h2>
+              <p>Featured cast members for this event.</p>
+            </div>
+          </div>
+
+          <div className="cast-strip" role="list" aria-label={`${eventTitle} cast members`}>
+            {castMembers.map((member) => {
+              const showImage = member.imageUrl && !castImageErrors[member.id];
+
+              return (
+                <article key={member.id} className="cast-card" role="listitem">
+                  <div className={`cast-photo ${showImage ? '' : 'is-fallback'}`}>
+                    {showImage ? (
+                      <img
+                        src={member.imageUrl}
+                        alt={member.name}
+                        loading="lazy"
+                        referrerPolicy="no-referrer"
+                        onError={() =>
+                          setCastImageErrors((current) => ({
+                            ...current,
+                            [member.id]: true
+                          }))
+                        }
+                      />
+                    ) : (
+                      <div className="cast-photo-fallback" style={getCastFallbackStyle(member.name)}>
+                        <span>{getCastInitials(member.name)}</span>
+                      </div>
+                    )}
+                  </div>
+                  <strong>{member.name}</strong>
+                  <p>{member.role ? `as ${member.role}` : 'Cast member'}</p>
+                </article>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+
+      {trailerMedia && isTrailerOpen ? (
+        <div className="trailer-pip" role="dialog" aria-modal="false" aria-label={`${eventTitle} trailer`}>
+          <div className="trailer-pip-head">
+            <div>
+              <span className="trailer-pip-eyebrow">Now Playing</span>
+              <strong>{eventTitle} Trailer</strong>
+            </div>
+            <div className="trailer-pip-actions">
+              <a
+                className="btn btn-small btn-outline"
+                href={trailerMedia.sourceUrl}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Open Link
+              </a>
+              <button type="button" className="icon-btn" onClick={() => setIsTrailerOpen(false)} aria-label="Close trailer">
+                x
+              </button>
+            </div>
+          </div>
+          <div className="trailer-pip-body">
+            {trailerMedia.kind === 'file' ? (
+              <video src={trailerMedia.sourceUrl} controls autoPlay playsInline />
+            ) : (
+              <iframe
+                src={trailerMedia.autoplayUrl || trailerMedia.embedUrl}
+                title={`${eventTitle} trailer`}
+                allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+                allowFullScreen
+                referrerPolicy="strict-origin-when-cross-origin"
+              />
+            )}
+          </div>
+        </div>
+      ) : null}
 
       {isInactiveEvent ? (
         <div className="state-wrapper">

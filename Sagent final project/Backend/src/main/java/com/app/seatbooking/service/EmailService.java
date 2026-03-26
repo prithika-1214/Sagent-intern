@@ -2,6 +2,7 @@ package com.app.seatbooking.service;
 
 import com.app.seatbooking.entity.BookedSeat;
 import com.app.seatbooking.entity.Booking;
+import com.app.seatbooking.entity.Cancellation;
 import com.app.seatbooking.entity.Event;
 import com.app.seatbooking.entity.EventSchedule;
 import com.app.seatbooking.entity.EventSeat;
@@ -65,6 +66,32 @@ public class EmailService {
     // ────────────────────────────────────────────────────────────────────────────
     //  HTML template builder
     // ────────────────────────────────────────────────────────────────────────────
+
+    @Async
+    public void sendRefundCompletedEmail(Booking booking, List<BookedSeat> bookedSeats, Cancellation cancellation, Payment payment) {
+        if (booking == null) {
+            return;
+        }
+
+        User user = booking.getUser();
+        if (user == null || user.getEmail() == null || user.getEmail().isBlank()) {
+            log.warn("Cannot send refund email - user or email is missing for booking {}", booking.getBookingId());
+            return;
+        }
+
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            helper.setFrom(FROM_EMAIL);
+            helper.setTo(user.getEmail());
+            helper.setSubject("Refund Completed - Booking #" + booking.getBookingId());
+            helper.setText(buildRefundCompletedHtmlContent(booking, bookedSeats, cancellation, payment), true);
+            mailSender.send(message);
+            log.info("Refund completion email sent to {} for booking #{}", user.getEmail(), booking.getBookingId());
+        } catch (Exception e) {
+            log.error("Failed to send refund completion email for booking #{}: {}", booking.getBookingId(), e.getMessage(), e);
+        }
+    }
 
     private String buildHtmlContent(Booking booking, List<BookedSeat> bookedSeats) {
         User user = booking.getUser();
@@ -219,6 +246,143 @@ public class EmailService {
     }
 
     // ── helper ──
+    private String buildRefundCompletedHtmlContent(
+            Booking booking,
+            List<BookedSeat> bookedSeats,
+            Cancellation cancellation,
+            Payment payment
+    ) {
+        User user = booking.getUser();
+        EventSchedule schedule = booking.getSchedule();
+        Event event = schedule != null ? schedule.getEvent() : null;
+        Venue venue = schedule != null ? schedule.getVenue() : null;
+        BigDecimal refundAmount = cancellation != null && cancellation.getRefundAmount() != null
+                ? cancellation.getRefundAmount()
+                : payment != null && payment.getAmount() != null ? payment.getAmount() : BigDecimal.ZERO;
+
+        String reservationLabel;
+        if (booking.getTicketQuantity() != null && booking.getTicketQuantity() > 0) {
+            reservationLabel = safe(booking.getTicketCategoryName()) + " x " + booking.getTicketQuantity();
+        } else if (bookedSeats != null && !bookedSeats.isEmpty()) {
+            reservationLabel = bookedSeats.stream()
+                    .map((bookedSeat) -> {
+                        EventSeat eventSeat = bookedSeat.getEventSeat();
+                        if (eventSeat == null || eventSeat.getSeat() == null) {
+                            return "-";
+                        }
+                        Seat seat = eventSeat.getSeat();
+                        return safe(seat.getSeatRow()) + " - " + safe(seat.getSeatNumber());
+                    })
+                    .collect(Collectors.joining(", "));
+        } else {
+            reservationLabel = "-";
+        }
+
+        String cancellationType = cancellation != null ? safe(cancellation.getCancellationType()) : "-";
+        String cancellationReason = cancellation != null ? safe(cancellation.getCancellationReason()) : "-";
+        String cancellationDate = cancellation != null && cancellation.getCancellationDate() != null
+                ? cancellation.getCancellationDate().format(DATETIME_FMT)
+                : "-";
+        String refundDate = payment != null && payment.getPaymentDate() != null
+                ? payment.getPaymentDate().format(DATETIME_FMT)
+                : cancellationDate;
+        String refundReference = payment != null ? safe(payment.getTransactionId()) : "-";
+        String refundMethod = payment != null ? safe(payment.getPaymentMethod()) : "SYSTEM";
+        String reservationTitle = booking.getTicketQuantity() != null && booking.getTicketQuantity() > 0 ? "Tickets" : "Seats";
+
+        StringBuilder html = new StringBuilder();
+        html.append("<!DOCTYPE html>")
+                .append("<html lang='en'><head><meta charset='UTF-8'/>")
+                .append("<meta name='viewport' content='width=device-width,initial-scale=1.0'/>")
+                .append("<title>Refund Completed</title>")
+                .append("<style>")
+                .append("body{margin:0;padding:0;background:#f4f6f9;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;}")
+                .append(".wrapper{max-width:600px;margin:30px auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08);}")
+                .append(".header{background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;padding:32px 28px;text-align:center;}")
+                .append(".header h1{margin:0;font-size:24px;font-weight:700;letter-spacing:.5px;}")
+                .append(".header p{margin:8px 0 0;font-size:14px;opacity:.9;}")
+                .append(".badge{display:inline-block;margin-top:14px;background:rgba(255,255,255,.2);color:#fff;padding:6px 16px;border-radius:30px;font-size:13px;font-weight:600;letter-spacing:.5px;}")
+                .append(".content{padding:28px;}")
+                .append(".section-title{font-size:15px;font-weight:700;color:#6366f1;text-transform:uppercase;letter-spacing:1px;margin:24px 0 10px;border-bottom:2px solid #e5e7eb;padding-bottom:6px;}")
+                .append(".info-table{width:100%;border-collapse:collapse;margin-bottom:10px;}")
+                .append(".info-table td{padding:8px 4px;font-size:14px;color:#374151;vertical-align:top;}")
+                .append(".info-table td:first-child{font-weight:600;color:#4b5563;width:40%;}")
+                .append(".seat-list{margin:6px 0 0;padding:0;list-style:none;}")
+                .append(".seat-list li{display:inline-block;background:#ede9fe;color:#6366f1;padding:5px 12px;border-radius:6px;font-size:13px;font-weight:600;margin:3px 4px 3px 0;}")
+                .append(".total-row{background:#f9fafb;border-radius:8px;padding:14px 16px;margin-top:12px;font-size:16px;font-weight:700;color:#111827;}")
+                .append(".footer{text-align:center;padding:20px 28px;font-size:12px;color:#9ca3af;background:#f9fafb;}")
+                .append("</style></head><body><div class='wrapper'>");
+
+        html.append("<div class='header'>")
+                .append("<h1>Cancellation Confirmed</h1>")
+                .append("<p>Your booking has been cancelled. Refund is completed.</p>")
+                .append("<span class='badge'>Booking #").append(booking.getBookingId()).append("</span>")
+                .append("</div>");
+
+        html.append("<div class='content'>");
+
+        html.append("<div class='section-title'>User Details</div><table class='info-table'>");
+        html.append(row("Name", safe(user != null ? user.getUserName() : null)));
+        html.append(row("Email", safe(user != null ? user.getEmail() : null)));
+        html.append(row("Mobile", user != null && user.getMobileNumber() != null ? String.valueOf(user.getMobileNumber()) : "-"));
+        html.append("</table>");
+
+        html.append("<div class='section-title'>Event Details</div><table class='info-table'>");
+        html.append(row("Event", safe(event != null ? event.getEventName() : null)));
+        html.append(row("Category", safe(event != null ? event.getCategory() : null)));
+        html.append(row("Genre", safe(event != null ? event.getGenre() : null)));
+        html.append(row("Language", safe(event != null ? event.getLanguage() : null)));
+        html.append(row("Duration", event != null && event.getDuration() != null ? event.getDuration() + " hrs" : "-"));
+        html.append(row("Venue", safe(venue != null ? venue.getVenueName() : null)));
+        html.append(row(
+                "Address",
+                venue == null
+                        ? "-"
+                        : safe(venue.getAddress()) + ", " + safe(venue.getCity()) + ", " + safe(venue.getState())
+        ));
+        html.append(row("Audi / Screen", safe(schedule != null ? schedule.getAudiName() : null)));
+        html.append(row("Show Date", schedule != null && schedule.getShowDate() != null ? schedule.getShowDate().format(DATE_FMT) : "-"));
+        html.append(row("Show Time", schedule != null && schedule.getShowTime() != null ? schedule.getShowTime().format(TIME_FMT) : "-"));
+        html.append("</table>");
+
+        html.append("<div class='section-title'>Cancellation Details</div><table class='info-table'>");
+        html.append(row("Booking ID", "#" + booking.getBookingId()));
+        html.append(row("Booking Date", booking.getBookingDate() != null ? booking.getBookingDate().format(DATETIME_FMT) : "-"));
+        html.append(row("Booking Status", safe(booking.getBookingStatus())));
+        html.append(row("Cancellation Type", cancellationType));
+        html.append(row("Cancellation Reason", cancellationReason));
+        html.append(row("Cancellation Date", cancellationDate));
+        html.append("</table>");
+
+        html.append("<table class='info-table'><tr><td>")
+                .append(reservationTitle)
+                .append("</td><td><ul class='seat-list'><li>")
+                .append(safe(reservationLabel))
+                .append("</li></ul></td></tr></table>");
+
+        html.append("<div class='section-title'>Refund Details</div><table class='info-table'>");
+        html.append(row("Refund Status", "COMPLETED"));
+        html.append(row("Refunded Amount", "Rs " + formatAmount(refundAmount)));
+        html.append(row("Refund Date", refundDate));
+        html.append(row("Refund Method", refundMethod));
+        html.append(row("Refund Reference", refundReference));
+        html.append("</table>");
+
+        html.append("<div class='total-row'>Total Refunded - Rs ")
+                .append(formatAmount(refundAmount))
+                .append("</div>");
+
+        html.append("</div>");
+
+        html.append("<div class='footer'>")
+                .append("<p>This is an auto-generated email. Please do not reply.</p>")
+                .append("<p>&copy; 2026 Seat Booking App. All rights reserved.</p>")
+                .append("</div>");
+
+        html.append("</div></body></html>");
+        return html.toString();
+    }
+
     private String row(String label, String value) {
         return "<tr><td>" + label + "</td><td>" + value + "</td></tr>";
     }

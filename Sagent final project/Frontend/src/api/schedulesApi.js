@@ -2,22 +2,55 @@ import apiClient from './axios';
 import { getValue } from '../utils/entity';
 
 const BASE_PATH = '/api/event-schedules';
+const hasValue = (value) => value !== undefined && value !== null && value !== '';
+const toNumberOrOriginal = (value) => {
+  if (!hasValue(value)) {
+    return undefined;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : value;
+};
 
 const toSchedulePayload = (payload = {}) => {
-  const eventIdValue = Number(getValue(payload, ['eventId', 'event_id']));
-  const venueIdValue = Number(getValue(payload, ['venueId', 'venue_id']));
   const availableSeatsValue = Number(getValue(payload, ['availableSeats', 'available_seats']));
   const hasAvailableSeats = Number.isFinite(availableSeatsValue);
+  const schedulePayload = {};
+  const eventIdValue = toNumberOrOriginal(getValue(payload, ['eventId', 'event_id']));
+  const venueIdValue = toNumberOrOriginal(getValue(payload, ['venueId', 'venue_id']));
+  const audiIdValue = getValue(payload, ['audiId', 'audi_id']);
+  const audiNameValue = getValue(payload, ['audiName', 'audi_name']);
+  const showDateValue = getValue(payload, ['showDate', 'show_date']);
+  const showTimeValue = getValue(payload, ['showTime', 'show_time']);
+  const scheduleStatusValue = getValue(payload, ['scheduleStatus', 'schedule_status']);
 
-  const schedulePayload = {
-    eventId: Number.isFinite(eventIdValue) ? eventIdValue : getValue(payload, ['eventId', 'event_id']),
-    venueId: Number.isFinite(venueIdValue) ? venueIdValue : getValue(payload, ['venueId', 'venue_id']),
-    audiId: getValue(payload, ['audiId', 'audi_id']),
-    audiName: getValue(payload, ['audiName', 'audi_name']),
-    showDate: getValue(payload, ['showDate', 'show_date']),
-    showTime: getValue(payload, ['showTime', 'show_time']),
-    scheduleStatus: getValue(payload, ['scheduleStatus', 'schedule_status'])
-  };
+  if (hasValue(eventIdValue)) {
+    schedulePayload.eventId = eventIdValue;
+  }
+
+  if (hasValue(venueIdValue)) {
+    schedulePayload.venueId = venueIdValue;
+  }
+
+  if (hasValue(audiIdValue)) {
+    schedulePayload.audiId = audiIdValue;
+  }
+
+  if (hasValue(audiNameValue)) {
+    schedulePayload.audiName = audiNameValue;
+  }
+
+  if (hasValue(showDateValue)) {
+    schedulePayload.showDate = showDateValue;
+  }
+
+  if (hasValue(showTimeValue)) {
+    schedulePayload.showTime = showTimeValue;
+  }
+
+  if (hasValue(scheduleStatusValue)) {
+    schedulePayload.scheduleStatus = scheduleStatusValue;
+  }
 
   if (hasAvailableSeats) {
     schedulePayload.availableSeats = availableSeatsValue;

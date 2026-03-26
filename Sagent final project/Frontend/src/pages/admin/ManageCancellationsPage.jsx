@@ -1,3 +1,4 @@
+import { useCallback, useMemo, useState } from 'react';
 import AdminCrudPage from '../../components/admin/AdminCrudPage';
 import { deleteCancellation, getCancellations, updateCancellation } from '../../api/cancellationsApi';
 import { getUsers } from '../../api/usersApi';
@@ -228,19 +229,60 @@ const renderActions = (row, { openEdit, openDelete, showEditAction, showDeleteAc
   );
 };
 
-const ManageCancellationsPage = () => (
-  <AdminCrudPage
-    title="Manage Cancellations"
-    columns={columns}
-    fields={fields}
-    fetchAll={loadCancellationsTable}
-    updateItem={updateCancellation}
-    deleteItem={deleteCancellation}
-    idKeys={['cancellation_id', 'cancellationId', 'id']}
-    showCreateButton={false}
-    renderActions={renderActions}
-    pageSize={10}
-  />
-);
+const ManageCancellationsPage = () => {
+  const [bookingIdQuery, setBookingIdQuery] = useState('');
+  const normalizedBookingIdQuery = useMemo(() => bookingIdQuery.trim().toLowerCase(), [bookingIdQuery]);
+
+  const filterRows = useCallback(
+    (rows = []) => {
+      if (!normalizedBookingIdQuery) {
+        return rows;
+      }
+
+      return rows.filter((row) =>
+        String(getValue(row, ['booking_id', 'bookingId'], '')).trim().toLowerCase().includes(normalizedBookingIdQuery)
+      );
+    },
+    [normalizedBookingIdQuery]
+  );
+
+  const renderFilters = useCallback(
+    () => (
+      <div className="filter-grid single">
+        <label className="field-group">
+          <span className="field-label">Search Booking ID</span>
+          <input
+            className="field-input"
+            value={bookingIdQuery}
+            onChange={(event) => setBookingIdQuery(event.target.value)}
+            placeholder="Enter booking id"
+          />
+        </label>
+      </div>
+    ),
+    [bookingIdQuery]
+  );
+
+  return (
+    <AdminCrudPage
+      title="Manage Cancellations"
+      columns={columns}
+      fields={fields}
+      fetchAll={loadCancellationsTable}
+      updateItem={updateCancellation}
+      deleteItem={deleteCancellation}
+      idKeys={['cancellation_id', 'cancellationId', 'id']}
+      showCreateButton={false}
+      renderActions={renderActions}
+      renderFilters={renderFilters}
+      filterRows={filterRows}
+      filterEmptyTitle="No cancellations found"
+      filterEmptyDescription={
+        normalizedBookingIdQuery ? `No cancellations match booking ID "${bookingIdQuery.trim()}".` : undefined
+      }
+      pageSize={10}
+    />
+  );
+};
 
 export default ManageCancellationsPage;

@@ -20,6 +20,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
+import org.hibernate.Hibernate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,15 +35,17 @@ public class CancellationService {
     private final EventScheduleRepository scheduleRepository;
     private final ConcertInventoryService concertInventoryService;
     private final BookingPaymentRecordService bookingPaymentRecordService;
+    private final EmailService emailService;
 
     public CancellationService(CancellationRepository cancellationRepository,
                                    BookingRepository bookingRepository,
                                    UserRepository userRepository,
                                    BookedSeatRepository bookedSeatRepository,
-                                   EventSeatRepository eventSeatRepository,
-                                   EventScheduleRepository scheduleRepository,
-                                   ConcertInventoryService concertInventoryService,
-                                   BookingPaymentRecordService bookingPaymentRecordService) {
+                                    EventSeatRepository eventSeatRepository,
+                                    EventScheduleRepository scheduleRepository,
+                                    ConcertInventoryService concertInventoryService,
+                                   BookingPaymentRecordService bookingPaymentRecordService,
+                                   EmailService emailService) {
         this.cancellationRepository = cancellationRepository;
         this.bookingRepository = bookingRepository;
         this.userRepository = userRepository;
@@ -51,6 +54,7 @@ public class CancellationService {
         this.scheduleRepository = scheduleRepository;
         this.concertInventoryService = concertInventoryService;
         this.bookingPaymentRecordService = bookingPaymentRecordService;
+        this.emailService = emailService;
     }
 
     @Transactional
@@ -116,6 +120,9 @@ public class CancellationService {
         cancellation.setRefundStatus(normalizedRefundStatus);
         cancellation.setCancellationDate(LocalDateTime.now());
         Cancellation saved = cancellationRepository.save(cancellation);
+        if (isRefundCompletedStatus(saved.getRefundStatus())) {
+            sendRefundCompletedEmail(saved, bookedSeats, payment);
+        }
 
         return CancellationDto.toResponse(saved);
     }
@@ -124,6 +131,7 @@ public class CancellationService {
     public CancellationDto updateCancellation(Long cancellationId, CancellationUpdateDto request) {
         Cancellation cancellation = cancellationRepository.findById(cancellationId)
                 .orElseThrow(() -> new ResourceNotFoundException("Cancellation not found: " + cancellationId));
+        String previousRefundStatus = cancellation.getRefundStatus();
         String normalizedRefundStatus = normalizeRefundStatus(request.getRefundStatus());
         cancellation.setRefundStatus(normalizedRefundStatus);
         List<BookedSeat> bookedSeats = bookedSeatRepository.findByBookingBookingId(cancellation.getBooking().getBookingId());
@@ -134,6 +142,9 @@ public class CancellationService {
         );
         cancellation.setRefundAmount(resolveRefundAmount(cancellation.getRefundAmount(), payment));
         Cancellation saved = cancellationRepository.save(cancellation);
+        if (!isRefundCompletedStatus(previousRefundStatus) && isRefundCompletedStatus(saved.getRefundStatus())) {
+            sendRefundCompletedEmail(saved, bookedSeats, payment);
+        }
         return CancellationDto.toResponse(saved);
     }
 
@@ -174,6 +185,32 @@ public class CancellationService {
         }
 
         return BigDecimal.ZERO;
+    }
+
+    private boolean isRefundCompletedStatus(String status) {
+        return "COMPLETED".equalsIgnoreCase(status == null ? "" : status.trim());
+    }
+
+    private void sendRefundCompletedEmail(Cancellation cancellation, List<BookedSeat> bookedSeats, Payment payment) {
+        Booking booking = cancellation.getBooking();
+        if (booking == null) {
+            return;
+        }
+
+        Hibernate.initialize(booking.getUser());
+        if (booking.getSchedule() != null) {
+            Hibernate.initialize(booking.getSchedule().getEvent());
+            Hibernate.initialize(booking.getSchedule().getVenue());
+        }
+
+        for (BookedSeat bookedSeat : bookedSeats) {
+            EventSeat eventSeat = bookedSeat.getEventSeat();
+            if (eventSeat != null) {
+                Hibernate.initialize(eventSeat.getSeat());
+            }
+        }
+
+        emailService.sendRefundCompletedEmail(booking, bookedSeats, cancellation, payment);
     }
 }
 

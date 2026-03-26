@@ -201,6 +201,7 @@ const ManageSeatsPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedVenueId, setSelectedVenueId] = useState('');
+  const [venueSearch, setVenueSearch] = useState('');
   const [seatSearch, setSeatSearch] = useState('');
   const [seatTypeFilter, setSeatTypeFilter] = useState('ALL');
   const [showModal, setShowModal] = useState(false);
@@ -307,25 +308,38 @@ const ManageSeatsPage = () => {
       .sort((first, second) => compareText(first.venueName, second.venueName));
   }, [venues, seatsByVenueId]);
 
+  const normalizedVenueSearch = useMemo(() => toText(venueSearch).toLowerCase(), [venueSearch]);
+
+  const filteredVenueCards = useMemo(() => {
+    if (!normalizedVenueSearch) {
+      return venueCards;
+    }
+
+    return venueCards.filter((venue) => venue.venueName.toLowerCase().includes(normalizedVenueSearch));
+  }, [normalizedVenueSearch, venueCards]);
+
+  const venueCardsForSelection = normalizedVenueSearch ? filteredVenueCards : venueCards;
+
   useEffect(() => {
-    if (!venueCards.length) {
+    if (!venueCardsForSelection.length) {
       if (selectedVenueId) {
         setSelectedVenueId('');
       }
       return;
     }
 
-    const hasCurrentVenue = venueCards.some((venue) => venue.venueId === selectedVenueId);
+    const hasCurrentVenue = venueCardsForSelection.some((venue) => venue.venueId === selectedVenueId);
     if (!hasCurrentVenue) {
       const nextVenue =
-        venueCards.find((venue) => (venue.isGroundVenue ? venue.concertCategoryCount > 0 : venue.seatCount > 0)) || venueCards[0];
+        venueCardsForSelection.find((venue) => (venue.isGroundVenue ? venue.concertCategoryCount > 0 : venue.seatCount > 0)) ||
+        venueCardsForSelection[0];
       setSelectedVenueId(nextVenue.venueId);
     }
-  }, [selectedVenueId, venueCards]);
+  }, [selectedVenueId, venueCardsForSelection]);
 
   const selectedVenue = useMemo(
-    () => venueCards.find((venue) => venue.venueId === selectedVenueId) || venueCards[0] || null,
-    [selectedVenueId, venueCards]
+    () => venueCardsForSelection.find((venue) => venue.venueId === selectedVenueId) || venueCardsForSelection[0] || null,
+    [selectedVenueId, venueCardsForSelection]
   );
 
   const selectedVenueUsesConcertInventory = Boolean(selectedVenue?.isGroundVenue);
@@ -974,44 +988,57 @@ const ManageSeatsPage = () => {
           <section className="seat-venue-panel">
             <div className="seat-panel-head">
               <h3>Venues</h3>
+              <label className="field-group">
+                <span className="field-label">Search Venue</span>
+                <input
+                  className="field-input"
+                  value={venueSearch}
+                  onChange={(event) => setVenueSearch(event.target.value)}
+                  placeholder="Search by venue name"
+                />
+              </label>
             </div>
             <div className="seat-venue-grid">
-              {venueCards.map((venue) => {
-                const isActive = venue.venueId === selectedVenue?.venueId;
-                const isConfigured = venue.isGroundVenue ? venue.concertCategoryCount > 0 : venue.seatCount > 0;
+              {filteredVenueCards.length ? (
+                filteredVenueCards.map((venue) => {
+                  const isActive = venue.venueId === selectedVenue?.venueId;
+                  const isConfigured = venue.isGroundVenue ? venue.concertCategoryCount > 0 : venue.seatCount > 0;
 
-                return (
-                  <button
-                    key={venue.venueId}
-                    type="button"
-                    className={`seat-venue-card ${isActive ? 'active' : ''}`}
-                    onClick={() => setSelectedVenueId(venue.venueId)}
-                  >
-                    <div className="seat-venue-card-head">
-                      <div>
-                        <strong>{venue.venueName}</strong>
+                  return (
+                    <button
+                      key={venue.venueId}
+                      type="button"
+                      className={`seat-venue-card ${isActive ? 'active' : ''}`}
+                      onClick={() => setSelectedVenueId(venue.venueId)}
+                    >
+                      <div className="seat-venue-card-head">
+                        <div>
+                          <strong>{venue.venueName}</strong>
+                        </div>
+                        <span className={`status-badge ${isConfigured ? 'success' : 'neutral'}`}>
+                          {isConfigured ? 'Configured' : 'Empty'}
+                        </span>
                       </div>
-                      <span className={`status-badge ${isConfigured ? 'success' : 'neutral'}`}>
-                        {isConfigured ? 'Configured' : 'Empty'}
-                      </span>
-                    </div>
-                    <p>{venue.location || 'Venue details unavailable'}</p>
-                    <div className="seat-venue-metrics">
-                      {venue.isGroundVenue ? (
-                        <>
+                      <p>{venue.location || 'Venue details unavailable'}</p>
+                      <div className="seat-venue-metrics">
+                        {venue.isGroundVenue ? (
                           <span>{venue.concertCategoryCount} categories</span>
-                          <span>{venue.concertTicketCount} tickets / slot</span>
-                        </>
-                      ) : (
-                        <>
-                          <span>{venue.seatCount} seats</span>
-                          <span>{venue.rowCount} rows</span>
-                        </>
-                      )}
-                    </div>
-                  </button>
-                );
-              })}
+                        ) : (
+                          <>
+                            <span>{venue.seatCount} seats</span>
+                            <span>{venue.rowCount} rows</span>
+                          </>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })
+              ) : (
+                <div className="state-wrapper">
+                  <h3>No venues match this search</h3>
+                  <p>Try a different venue name.</p>
+                </div>
+              )}
             </div>
           </section>
 

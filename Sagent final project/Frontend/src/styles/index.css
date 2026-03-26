@@ -1181,13 +1181,245 @@ a {
   margin-bottom: 1.25rem;
 }
 
-.detail-card h1 {
+.detail-card-top {
+  display: grid;
+  grid-template-columns: minmax(220px, 270px) minmax(0, 1fr);
+  gap: 1.1rem;
+  align-items: stretch;
+}
+
+.detail-poster {
+  position: relative;
+  min-height: 320px;
+  border-radius: 18px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: linear-gradient(135deg, #dff6f2 0%, #bfdbfe 100%);
+}
+
+.detail-poster img,
+.detail-poster .event-card-fallback {
+  width: 100%;
+  height: 100%;
+}
+
+.detail-poster img {
+  display: block;
+  object-fit: cover;
+}
+
+.detail-poster.is-fallback .event-card-fallback-content strong {
+  max-width: 12ch;
+}
+
+.detail-card-copy {
+  display: flex;
+  flex-direction: column;
+}
+
+.detail-card-copy h1 {
   margin: 0 0 0.7rem;
 }
 
-.detail-card > p {
+.detail-card-copy > p {
   margin: 0 0 1rem;
   color: var(--text-muted);
+}
+
+.detail-poster-overlay {
+  position: absolute;
+  inset: auto 0 1rem;
+  display: flex;
+  justify-content: center;
+  padding-inline: 1rem;
+  pointer-events: none;
+}
+
+.trailer-pill {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.72rem 1rem;
+  border: none;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.8);
+  color: #fff;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.28);
+  transition: transform 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.trailer-pill:hover {
+  transform: translateY(-1px);
+  background: rgba(15, 23, 42, 0.9);
+  box-shadow: 0 22px 40px rgba(15, 23, 42, 0.34);
+}
+
+.trailer-pill-play {
+  width: 0;
+  height: 0;
+  border-top: 7px solid transparent;
+  border-bottom: 7px solid transparent;
+  border-left: 12px solid #fff;
+}
+
+.trailer-pip {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  width: min(420px, calc(100vw - 32px));
+  border-radius: 24px;
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(2, 6, 23, 0.96);
+  color: #fff;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 32px 68px rgba(2, 6, 23, 0.48);
+  z-index: 60;
+}
+
+.trailer-pip-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.95rem 1rem;
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.98) 0%, rgba(15, 118, 110, 0.9) 100%);
+}
+
+.trailer-pip-head strong {
+  display: block;
+  font-size: 1rem;
+  line-height: 1.3;
+}
+
+.trailer-pip-eyebrow {
+  display: inline-block;
+  margin-bottom: 0.2rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(226, 232, 240, 0.76);
+}
+
+.trailer-pip-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.trailer-pip .icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.trailer-pip .btn.btn-outline {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+}
+
+.trailer-pip .btn.btn-outline:hover {
+  border-color: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.trailer-pip-body {
+  aspect-ratio: 16 / 9;
+  background: #000;
+}
+
+.trailer-pip-body iframe,
+.trailer-pip-body video {
+  width: 100%;
+  height: 100%;
+  display: block;
+  border: 0;
+  background: #000;
+}
+
+.cast-section {
+  margin-bottom: 1.25rem;
+}
+
+.cast-strip {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(156px, 176px);
+  gap: 1rem;
+  overflow-x: auto;
+  padding-bottom: 0.4rem;
+  scroll-snap-type: x proximity;
+}
+
+.cast-strip::-webkit-scrollbar {
+  height: 8px;
+}
+
+.cast-strip::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.45);
+  border-radius: 999px;
+}
+
+.cast-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  scroll-snap-align: start;
+}
+
+.cast-photo {
+  aspect-ratio: 1 / 1.15;
+  overflow: hidden;
+  border-radius: 22px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.cast-photo img,
+.cast-photo-fallback {
+  width: 100%;
+  height: 100%;
+}
+
+.cast-photo img {
+  display: block;
+  object-fit: cover;
+}
+
+.cast-photo-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.cast-card strong {
+  font-size: 1rem;
+  line-height: 1.25;
+}
+
+.cast-card p {
+  margin: 0;
+  color: var(--text-muted);
+  line-height: 1.4;
 }
 
 .detail-grid {
@@ -1213,6 +1445,30 @@ a {
 .detail-grid span {
   color: var(--text-muted);
   font-size: 0.85rem;
+}
+
+.ticket-focus-block {
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel-bg);
+}
+
+.ticket-focus-content {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.ticket-focus-chip {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 0.38rem 0.62rem;
+  font-size: 0.96rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  background: transparent;
 }
 
 .status-badge {
@@ -1822,6 +2078,91 @@ select.field-input option {
   font-size: 0.8rem;
 }
 
+.full-width-field {
+  grid-column: 1 / -1;
+}
+
+.cast-editor-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+}
+
+.cast-editor-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.cast-editor-item {
+  display: grid;
+  grid-template-columns: 86px minmax(0, 1fr) auto;
+  gap: 0.85rem;
+  align-items: start;
+  padding: 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--surface-raised);
+}
+
+.cast-editor-preview {
+  width: 86px;
+  height: 86px;
+  overflow: hidden;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: var(--panel-bg);
+}
+
+.cast-editor-preview img,
+.cast-editor-fallback {
+  width: 100%;
+  height: 100%;
+}
+
+.cast-editor-preview img {
+  display: block;
+  object-fit: cover;
+}
+
+.cast-editor-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.cast-editor-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.cast-image-field {
+  grid-column: 1 / -1;
+}
+
+.cast-editor-remove {
+  align-self: start;
+}
+
+.cast-editor-empty {
+  border: 1px dashed var(--border);
+  border-radius: 16px;
+  padding: 1rem;
+  background: var(--panel-bg);
+}
+
+.cast-editor-empty p {
+  margin: 0;
+  color: var(--text-muted);
+}
+
 .admin-image-preview {
   display: flex;
   flex-direction: column;
@@ -2230,6 +2571,12 @@ select.field-input option {
 .seat-venue-panel,
 .seat-workspace {
   padding: 1rem;
+}
+
+.seat-panel-head {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
 }
 
 .seat-panel-head h3,
@@ -2768,6 +3115,24 @@ select.field-input option {
     grid-template-columns: 1fr;
   }
 
+  .detail-card-top {
+    grid-template-columns: 1fr;
+  }
+
+  .detail-poster {
+    max-width: 320px;
+    width: 100%;
+    margin-inline: auto;
+  }
+
+  .cast-editor-item {
+    grid-template-columns: 1fr;
+  }
+
+  .cast-editor-grid {
+    grid-template-columns: 1fr;
+  }
+
   .admin-layout {
     grid-template-columns: 1fr;
   }
@@ -2848,6 +3213,33 @@ select.field-input option {
   .concert-category-stats,
   .concert-summary-grid {
     grid-template-columns: 1fr;
+  }
+
+  .detail-poster {
+    min-height: 280px;
+    max-width: none;
+  }
+
+  .trailer-pip {
+    left: 16px;
+    right: 16px;
+    bottom: 16px;
+    width: auto;
+    border-radius: 20px;
+  }
+
+  .trailer-pill {
+    padding: 0.66rem 0.92rem;
+  }
+
+  .cast-strip {
+    grid-auto-columns: minmax(144px, 154px);
+    gap: 0.85rem;
+  }
+
+  .cast-editor-preview {
+    width: 76px;
+    height: 76px;
   }
 
   .payments-summary-grid {

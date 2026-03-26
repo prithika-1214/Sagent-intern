@@ -33,6 +33,21 @@ const BookingSuccessPage = () => {
     (isConcertBooking
       ? `${data?.ticket_category_name || '-'} x${data?.ticket_quantity || 0}`
       : (data?.seat_labels || []).join(', ') || '-');
+  const reservationItems = useMemo(() => {
+    if (isConcertBooking) {
+      return [reservationLabelValue];
+    }
+
+    const explicitSeatLabels = Array.isArray(data?.seat_labels) ? data.seat_labels.filter((label) => String(label || '').trim()) : [];
+    if (explicitSeatLabels.length) {
+      return explicitSeatLabels;
+    }
+
+    return String(reservationLabelValue || '')
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }, [data?.seat_labels, isConcertBooking, reservationLabelValue]);
   const ticketDetails = useMemo(
     () => ({
       bookingId: data?.booking_id,
@@ -128,9 +143,19 @@ const BookingSuccessPage = () => {
             <span>Payment Method</span>
             <strong>{data.payment_method}</strong>
           </div>
-          <div className="full-width">
+          <div className="full-width ticket-focus-block">
             <span>{reservationLabelTitle}</span>
-            <strong>{reservationLabelValue}</strong>
+            <div className="ticket-focus-content">
+              {reservationItems.length ? (
+                reservationItems.map((item, index) => (
+                  <strong key={`${item}-${index}`} className="ticket-focus-chip">
+                    {item}
+                  </strong>
+                ))
+              ) : (
+                <strong className="ticket-focus-chip">-</strong>
+              )}
+            </div>
           </div>
         </div>
         <div className="hero-actions">

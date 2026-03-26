@@ -204,10 +204,11 @@ public class EventScheduleService {
         if (BookingDomainRules.requiresAudi(eventCategory)) {
             audiId = BookingDomainRules.normalizeAudiId(request.getAudiId(), request.getAudiName());
             audiName = BookingDomainRules.normalizeAudiName(request.getAudiName(), audiId);
-        } else if (!BookingDomainRules.text(request.getAudiId()).isBlank()) {
-            throw new IllegalArgumentException("Concert schedules must not use audi_id");
         } else {
-            audiName = "Open Ground";
+            audiName = BookingDomainRules.text(request.getAudiName());
+            if (audiName.isBlank()) {
+                audiName = "Open Ground";
+            }
         }
 
         return new EventScheduleDto(
@@ -267,11 +268,31 @@ public class EventScheduleService {
         Long currentVenueId = currentSchedule.getVenue() != null ? currentSchedule.getVenue().getVenueId() : null;
         boolean immutableFieldChanged = !Objects.equals(currentEventId, request.getEventId())
                 || !Objects.equals(currentVenueId, request.getVenueId())
-                || !Objects.equals(BookingDomainRules.text(currentSchedule.getAudiId()), BookingDomainRules.text(request.getAudiId()));
+                || !sameLockedArea(currentSchedule, request);
 
         if (immutableFieldChanged) {
             throw new IllegalArgumentException("Event, venue, and audi cannot be changed after bookings exist for a schedule");
         }
+    }
+
+    private boolean sameLockedArea(EventSchedule currentSchedule, EventScheduleDto request) {
+        String eventCategory = currentSchedule.getEvent() != null
+                ? BookingDomainRules.normalizeEventCategory(currentSchedule.getEvent().getCategory())
+                : "";
+
+        if (BookingDomainRules.isConcertEvent(eventCategory)) {
+            return BookingDomainRules.text(currentSchedule.getAudiName())
+                    .equalsIgnoreCase(BookingDomainRules.text(request.getAudiName()));
+        }
+
+        String currentAudiId = BookingDomainRules.text(currentSchedule.getAudiId());
+        String requestedAudiId = BookingDomainRules.text(request.getAudiId());
+        if (!currentAudiId.isBlank() || !requestedAudiId.isBlank()) {
+            return currentAudiId.equalsIgnoreCase(requestedAudiId);
+        }
+
+        return BookingDomainRules.text(currentSchedule.getAudiName())
+                .equalsIgnoreCase(BookingDomainRules.text(request.getAudiName()));
     }
 
     private void validateNoOverlap(EventScheduleDto request, Event event, Long currentScheduleId) {

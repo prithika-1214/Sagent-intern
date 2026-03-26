@@ -64,6 +64,13 @@ const requiredVenueTypeForEventCategory = (eventCategory) => {
 const isConcertEventCategory = (eventCategory) => normalizeEventCategory(eventCategory) === EVENT_CATEGORY_CONCERT;
 const getAudiFieldDefaultValue = (eventCategory) =>
   isConcertEventCategory(eventCategory) ? CONCERT_AUDI_NAME : DEFAULT_AUDI_NAME;
+const getSlotAreaFieldLabel = (eventCategory) =>
+  isConcertEventCategory(eventCategory) ? 'Open Ground / Area Name' : 'Audi / Screen Name';
+const getSlotAreaFieldHelperText = (eventCategory) =>
+  isConcertEventCategory(eventCategory)
+    ? 'Use the open ground, lawn, or area name for this concert slot.'
+    : 'Use the screen or audi name for this slot.';
+const resolveAudiName = (value, eventCategory) => normalizeText(value) || getAudiFieldDefaultValue(eventCategory);
 
 const scheduleStatusOptions = [
   { value: 'OPEN', label: 'OPEN' },
@@ -71,12 +78,13 @@ const scheduleStatusOptions = [
   { value: 'CANCELLED', label: 'CANCELLED' }
 ];
 
-const normalizeScheduleRow = (schedule) => ({
+const normalizeScheduleRow = (schedule, eventCategory) => ({
   ...schedule,
   schedule_id: getValue(schedule, ['schedule_id', 'scheduleId', 'id']),
   event_id: getValue(schedule, ['event_id', 'eventId']),
   venue_id: getValue(schedule, ['venue_id', 'venueId']),
-  audi_name: getValue(schedule, ['audi_name', 'audiName'], DEFAULT_AUDI_NAME),
+  audi_id: getValue(schedule, ['audi_id', 'audiId']),
+  audi_name: resolveAudiName(getValue(schedule, ['audi_name', 'audiName']), eventCategory),
   show_date: getValue(schedule, ['show_date', 'showDate']),
   show_time: getValue(schedule, ['show_time', 'showTime']),
   end_time: getValue(schedule, ['end_time', 'endTime']),
@@ -116,6 +124,25 @@ const toFormFieldValue = (fieldName, value) => {
   }
   return value;
 };
+const resolveScheduleId = (item) => getValue(item, ['schedule_id', 'id']) || getEntityId(item);
+const getScheduleUpdatePayload = (currentItem, values = {}, preserveLockedFields = false, eventCategory = '') => {
+  const immutableSource = preserveLockedFields && currentItem ? currentItem : values;
+  const payload = {
+    event_id: getValue(immutableSource, ['event_id', 'eventId']),
+    venue_id: getValue(immutableSource, ['venue_id', 'venueId']),
+    audi_name: getValue(immutableSource, ['audi_name', 'audiName']),
+    show_date: getValue(values, ['show_date']),
+    show_time: getValue(values, ['show_time']),
+    schedule_status: getValue(values, ['schedule_status'])
+  };
+  const audiId = getValue(immutableSource, ['audi_id', 'audiId']);
+
+  if (!isConcertEventCategory(eventCategory) && audiId !== undefined && audiId !== null && audiId !== '') {
+    payload.audi_id = audiId;
+  }
+
+  return payload;
+};
 
 const ManageSchedulesPage = () => {
   const toast = useToast();
@@ -138,8 +165,9 @@ const ManageSchedulesPage = () => {
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const editingScheduleId = editingItem ? normalizeText(resolveScheduleId(editingItem)) : '';
+  const editingItemHasBookings = Boolean(editingScheduleId && lockedScheduleIds.has(editingScheduleId));
   const selectedEventCategory = normalizeEventCategory(eventCategoryMap[normalizeText(formValues.event_id)]);
-  const selectedEventRequiresAudi = selectedEventCategory && !isConcertEventCategory(selectedEventCategory);
   const filteredVenueOptions = useMemo(() => {
     if (!selectedEventCategory) {
       return venueOptions;
@@ -159,7 +187,9 @@ const ManageSchedulesPage = () => {
         type: eventOptions.length ? 'select' : 'number',
         required: true,
         options: eventOptions,
-        placeholder: 'Select event'
+        placeholder: 'Select event',
+        disabled: editingItemHasBookings,
+        helperText: editingItemHasBookings ? 'This cannot be changed after bookings exist for this schedule.' : undefined
       },
       {
         name: 'venue_id',
@@ -167,16 +197,21 @@ const ManageSchedulesPage = () => {
         type: filteredVenueOptions.length ? 'select' : 'number',
         required: true,
         options: filteredVenueOptions,
-        placeholder: selectedEventCategory ? 'Select compatible venue' : 'Select venue'
+        placeholder: selectedEventCategory ? 'Select compatible venue' : 'Select venue',
+        disabled: editingItemHasBookings,
+        helperText: editingItemHasBookings ? 'This cannot be changed after bookings exist for this schedule.' : undefined
       },
       {
         name: 'audi_name',
-        label: selectedEventRequiresAudi ? 'Audi / Screen Name' : 'Inventory Area',
-        type: selectedEventRequiresAudi ? 'text' : 'hidden',
-        required: selectedEventRequiresAudi,
+        label: getSlotAreaFieldLabel(selectedEventCategory),
+        type: 'text',
+        required: true,
         defaultValue: getAudiFieldDefaultValue(selectedEventCategory),
         placeholder: getAudiFieldDefaultValue(selectedEventCategory),
-        helperText: selectedEventRequiresAudi ? 'Use the screen or audi name for this slot.' : undefined
+        disabled: editingItemHasBookings,
+        helperText: editingItemHasBookings
+          ? 'This area cannot be changed after bookings exist for this schedule.'
+          : getSlotAreaFieldHelperText(selectedEventCategory)
       },
       { name: 'show_date', label: 'Show Date', type: 'date', required: true, min: todayDateInputValue },
       { name: 'show_time', label: 'Show Time', type: 'time', required: true, defaultValue: DEFAULT_SHOW_TIME },
@@ -189,7 +224,7 @@ const ManageSchedulesPage = () => {
         options: scheduleStatusOptions
       }
     ],
-    [eventOptions, filteredVenueOptions, selectedEventCategory, selectedEventRequiresAudi, todayDateInputValue]
+    [editingItemHasBookings, eventOptions, filteredVenueOptions, selectedEventCategory, todayDateInputValue]
   );
   const initialValues = useMemo(() => getInitialValues(fields), [fields]);
 
@@ -211,7 +246,6 @@ const ManageSchedulesPage = () => {
 
       const events = normalizeArray(eventsResponse);
       const venues = normalizeArray(venuesResponse);
-      const schedules = normalizeArray(schedulesResponse).map((schedule) => normalizeScheduleRow(schedule));
       const bookings = normalizeArray(bookingsResponse);
       const nextLockedScheduleIds = new Set(
         bookings.map((booking) => normalizeText(getValue(booking, ['schedule_id', 'scheduleId']))).filter(Boolean)
@@ -231,6 +265,10 @@ const ManageSchedulesPage = () => {
         }
         return acc;
       }, {});
+      const schedules = normalizeArray(schedulesResponse).map((schedule) => {
+        const eventId = normalizeText(getValue(schedule, ['event_id', 'eventId']));
+        return normalizeScheduleRow(schedule, nextEventCategoryMap[eventId]);
+      });
 
       const nextVenueNameMap = venues.reduce((acc, venue) => {
         const id = normalizeText(getValue(venue, ['venue_id', 'venueId', 'id']));
@@ -290,9 +328,6 @@ const ManageSchedulesPage = () => {
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const resolveScheduleId = (item) => getValue(item, ['schedule_id', 'id']) || getEntityId(item);
-
   const groupedEvents = useMemo(() => {
     const groupedMap = new Map();
 
@@ -321,7 +356,7 @@ const ManageSchedulesPage = () => {
       }
 
       const venueGroup = eventGroup.venues.get(venueId);
-      const audiName = normalizeText(getValue(row, ['audi_name', 'audiName'], DEFAULT_AUDI_NAME)) || DEFAULT_AUDI_NAME;
+      const audiName = resolveAudiName(getValue(row, ['audi_name', 'audiName']), eventCategoryMap[eventId]);
 
       if (!venueGroup.audis.has(audiName)) {
         venueGroup.audis.set(audiName, {
@@ -365,21 +400,31 @@ const ManageSchedulesPage = () => {
   }, [groupedEvents, normalizedEventNameQuery]);
 
   const openCreateModal = (defaults = {}) => {
+    const nextEventId = defaults.event_id ? String(defaults.event_id) : initialValues.event_id;
+    const nextEventCategory = normalizeEventCategory(eventCategoryMap[normalizeText(nextEventId)]);
+
     setEditingItem(null);
     setFormErrors({});
     setFormValues({
       ...initialValues,
-      event_id: defaults.event_id ? String(defaults.event_id) : initialValues.event_id,
+      event_id: nextEventId,
       venue_id: defaults.venue_id ? String(defaults.venue_id) : initialValues.venue_id,
-      audi_name: defaults.audi_name || initialValues.audi_name || DEFAULT_AUDI_NAME,
+      audi_name: defaults.audi_name ? String(defaults.audi_name) : getAudiFieldDefaultValue(nextEventCategory),
       show_time: defaults.show_time || initialValues.show_time || DEFAULT_SHOW_TIME
     });
     setShowModal(true);
   };
 
   const openEditModal = (item) => {
+    const itemEventId = normalizeText(getValue(item, ['event_id']));
+    const itemEventCategory = normalizeEventCategory(eventCategoryMap[itemEventId]);
     const nextValues = { ...initialValues };
     fields.forEach((field) => {
+      if (field.name === 'audi_name') {
+        nextValues[field.name] = resolveAudiName(getValue(item, [field.name]), itemEventCategory);
+        return;
+      }
+
       nextValues[field.name] = toFormFieldValue(field.name, getValue(item, [field.name], nextValues[field.name]));
     });
 
@@ -423,7 +468,15 @@ const ManageSchedulesPage = () => {
     try {
       setSaving(true);
       if (editingItem) {
-        await updateSchedule(resolveScheduleId(editingItem), formValues);
+        await updateSchedule(
+          resolveScheduleId(editingItem),
+          getScheduleUpdatePayload(
+            editingItem,
+            formValues,
+            editingItemHasBookings,
+            eventCategoryMap[normalizeText(getValue(editingItem, ['event_id']))]
+          )
+        );
         toast.success('Schedule updated');
       } else {
         await createSchedule(formValues);
@@ -603,7 +656,10 @@ const ManageSchedulesPage = () => {
         title="Delete Slot"
         message={
           confirmDelete
-            ? `${lockedScheduleIds.has(normalizeText(resolveScheduleId(confirmDelete))) ? 'This slot has bookings. Deleting it will also remove those bookings, payments, cancellations, and booked seats. ' : ''}Delete the ${formatDate(getValue(confirmDelete, ['show_date']))} ${formatTime(getValue(confirmDelete, ['show_time']))} slot from ${venueNameMap[normalizeText(getValue(confirmDelete, ['venue_id']))] || 'this venue'} (${getValue(confirmDelete, ['audi_name', 'audiName'], DEFAULT_AUDI_NAME)})?`
+            ? `${lockedScheduleIds.has(normalizeText(resolveScheduleId(confirmDelete))) ? 'This slot has bookings. Deleting it will also remove those bookings, payments, cancellations, and booked seats. ' : ''}Delete the ${formatDate(getValue(confirmDelete, ['show_date']))} ${formatTime(getValue(confirmDelete, ['show_time']))} slot from ${venueNameMap[normalizeText(getValue(confirmDelete, ['venue_id']))] || 'this venue'} (${resolveAudiName(
+                getValue(confirmDelete, ['audi_name', 'audiName']),
+                eventCategoryMap[normalizeText(getValue(confirmDelete, ['event_id']))]
+              )})?`
             : 'This will permanently remove the selected slot. Continue?'
         }
         confirmText="Delete Slot"

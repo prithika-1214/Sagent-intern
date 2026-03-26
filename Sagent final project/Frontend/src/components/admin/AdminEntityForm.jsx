@@ -1,5 +1,7 @@
 import FormInput from '../common/FormInput';
 import SelectInput from '../common/SelectInput';
+import { getCastFallbackStyle, getCastInitials } from '../../utils/eventCast';
+import { getValue } from '../../utils/entity';
 
 const IMAGE_MAX_WIDTH = 1200;
 const IMAGE_MAX_HEIGHT = 720;
@@ -48,6 +50,37 @@ const createSyntheticChangeEvent = (name, value) => ({
   target: { name, value }
 });
 
+const createCastMemberId = () => `cast-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+const createEmptyCastMember = () => ({
+  id: createCastMemberId(),
+  name: '',
+  role: '',
+  imageUrl: ''
+});
+
+const toCastText = (value) => String(value ?? '');
+
+const normalizeCastMembersForForm = (value) => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.map((member = {}, index) => {
+    const name = toCastText(getValue(member, ['name', 'actor_name', 'actorName']));
+    const role = toCastText(getValue(member, ['role', 'character_name', 'characterName', 'character', 'as']));
+    const imageUrl = toCastText(getValue(member, ['image_url', 'imageUrl', 'photo_url', 'photoUrl']));
+    const id = toCastText(getValue(member, ['id'])) || `cast-${index}`;
+
+    return {
+      id,
+      name,
+      role,
+      imageUrl
+    };
+  });
+};
+
 const AdminEntityForm = ({ fields, values, errors, onChange, onSubmit, onCancel, loading, submitText }) => {
   const handleFileChange = async (event, field) => {
     const input = event.target;
@@ -80,6 +113,10 @@ const AdminEntityForm = ({ fields, values, errors, onChange, onSubmit, onCancel,
   const renderHelperText = (field) =>
     field.helperText && !errors[field.name] ? <small className="field-help">{field.helperText}</small> : null;
 
+  const updateCastMembers = (fieldName, castMembers) => {
+    onChange(createSyntheticChangeEvent(fieldName, castMembers));
+  };
+
   return (
     <form className="grid-form two-col" onSubmit={onSubmit}>
       {fields.map((field) => {
@@ -89,17 +126,20 @@ const AdminEntityForm = ({ fields, values, errors, onChange, onSubmit, onCancel,
 
         if (field.type === 'select') {
           return (
-            <SelectInput
-              key={field.name}
-              label={field.label}
-              name={field.name}
-              value={values[field.name]}
-              onChange={onChange}
-              options={field.options || []}
-              required={field.required}
-              error={errors[field.name]}
-              placeholder={field.placeholder}
-            />
+            <div key={field.name}>
+              <SelectInput
+                label={field.label}
+                name={field.name}
+                value={values[field.name]}
+                onChange={onChange}
+                options={field.options || []}
+                required={field.required}
+                error={errors[field.name]}
+                placeholder={field.placeholder}
+                disabled={field.disabled}
+              />
+              {renderHelperText(field)}
+            </div>
           );
         }
 
@@ -117,10 +157,177 @@ const AdminEntityForm = ({ fields, values, errors, onChange, onSubmit, onCancel,
                 onChange={onChange}
                 placeholder={field.placeholder}
                 rows={4}
+                disabled={field.disabled}
               />
               {errors[field.name] ? <small className="field-error">{errors[field.name]}</small> : null}
               {renderHelperText(field)}
             </label>
+          );
+        }
+
+        if (field.type === 'cast-list') {
+          const castMembers = normalizeCastMembersForForm(values[field.name]);
+
+          return (
+            <div key={field.name} className="field-group full-width-field">
+              <div className="cast-editor-head">
+                <label className="field-label">
+                  {field.label}
+                  {field.required ? <em>*</em> : null}
+                </label>
+                <button
+                  type="button"
+                  className="btn btn-small btn-outline"
+                  onClick={() => updateCastMembers(field.name, [...castMembers, createEmptyCastMember()])}
+                  disabled={loading}
+                >
+                  Add Cast Member
+                </button>
+              </div>
+
+              {castMembers.length ? (
+                <div className="cast-editor-list">
+                  {castMembers.map((member, index) => (
+                    <div key={member.id} className="cast-editor-item">
+                      <div className="cast-editor-preview">
+                        {member.imageUrl ? (
+                          <img src={member.imageUrl} alt={`${member.name} preview`} />
+                        ) : (
+                          <div className="cast-editor-fallback" style={getCastFallbackStyle(member.name)}>
+                            <span>{getCastInitials(member.name)}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="cast-editor-grid">
+                        <label className="field-group">
+                          <span className="field-label">Name</span>
+                          <input
+                            className="field-input"
+                            name={`${field.name}-${index}-name`}
+                            value={member.name}
+                            onChange={(event) =>
+                              updateCastMembers(
+                                field.name,
+                                castMembers.map((currentMember, currentIndex) =>
+                                  currentIndex === index
+                                    ? { ...currentMember, name: event.target.value }
+                                    : currentMember
+                                )
+                              )
+                            }
+                            placeholder="Actor or artist name"
+                          />
+                        </label>
+
+                        <label className="field-group">
+                          <span className="field-label">Role</span>
+                          <input
+                            className="field-input"
+                            name={`${field.name}-${index}-role`}
+                            value={member.role}
+                            onChange={(event) =>
+                              updateCastMembers(
+                                field.name,
+                                castMembers.map((currentMember, currentIndex) =>
+                                  currentIndex === index
+                                    ? { ...currentMember, role: event.target.value }
+                                    : currentMember
+                                )
+                              )
+                            }
+                            placeholder="Character or role"
+                          />
+                        </label>
+
+                        <label className="field-group cast-image-field">
+                          <span className="field-label">Image URL</span>
+                          <input
+                            className="field-input"
+                            name={`${field.name}-${index}-imageUrl`}
+                            value={member.imageUrl}
+                            onChange={(event) =>
+                              updateCastMembers(
+                                field.name,
+                                castMembers.map((currentMember, currentIndex) =>
+                                  currentIndex === index
+                                    ? { ...currentMember, imageUrl: event.target.value }
+                                    : currentMember
+                                )
+                              )
+                            }
+                            placeholder="https://..."
+                          />
+                        </label>
+                      </div>
+
+                      <button
+                        type="button"
+                        className="btn btn-small btn-danger cast-editor-remove"
+                        onClick={() =>
+                          updateCastMembers(
+                            field.name,
+                            castMembers.filter((_, currentIndex) => currentIndex !== index)
+                          )
+                        }
+                        disabled={loading}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="cast-editor-empty">
+                  <p>No cast members added yet.</p>
+                </div>
+              )}
+
+              {errors[field.name] ? <small className="field-error">{errors[field.name]}</small> : null}
+              {renderHelperText(field)}
+            </div>
+          );
+        }
+
+        if (field.type === 'image-url') {
+          const previewUrl = values[field.name] || '';
+
+          return (
+            <div key={field.name} className="field-group">
+              <label className="field-label" htmlFor={field.name}>
+                {field.label}
+                {field.required ? <em>*</em> : null}
+              </label>
+              <input
+                id={field.name}
+                className={`field-input ${errors[field.name] ? 'has-error' : ''}`}
+                name={field.name}
+                type="url"
+                value={previewUrl}
+                onChange={onChange}
+                placeholder={field.placeholder || 'https://...'}
+                autoComplete="off"
+              />
+              {previewUrl ? (
+                <div className="admin-image-preview">
+                  <img src={previewUrl} alt={`${field.label} preview`} />
+                  <button
+                    type="button"
+                    className="btn btn-small btn-outline"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      onChange(createSyntheticChangeEvent(field.name, ''));
+                    }}
+                    disabled={loading}
+                  >
+                    Remove Poster
+                  </button>
+                </div>
+              ) : null}
+              {errors[field.name] ? <small className="field-error">{errors[field.name]}</small> : null}
+              {renderHelperText(field)}
+            </div>
           );
         }
 
@@ -172,14 +379,15 @@ const AdminEntityForm = ({ fields, values, errors, onChange, onSubmit, onCancel,
               name={field.name}
               value={values[field.name]}
               onChange={onChange}
-              type={field.type || 'text'}
-              placeholder={field.placeholder}
-              required={field.required}
-              error={errors[field.name]}
-              min={field.min}
-              max={field.max}
-              step={field.step}
-            />
+                type={field.type || 'text'}
+                placeholder={field.placeholder}
+                required={field.required}
+                error={errors[field.name]}
+                min={field.min}
+                max={field.max}
+                step={field.step}
+                disabled={field.disabled}
+              />
             {renderHelperText(field)}
           </div>
         );
